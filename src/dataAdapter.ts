@@ -1,13 +1,14 @@
 export type MarketStatus='LIVE'|'STALE'|'DISCONNECTED';
-export type MarketSource='NSE_PUBLIC'|'YAHOO_PUBLIC'|'AUTHORIZED_FEED'|'DEMO';
+export type MarketSource='NSE_PUBLIC'|'YAHOO_CHART_PUBLIC'|'YAHOO_PUBLIC'|'AUTHORIZED_FEED'|'DEMO';
 export type MarketSnapshot={source:MarketSource;status:MarketStatus;asOf:string;quotes:Record<string,{price:number;prevClose:number;gapPct:number;activity:number;open:number;high:number;low:number}>};
 export interface MarketDataAdapter{getSnapshot(symbols:string[]):Promise<MarketSnapshot>}
 
 const NSE='https://www.nseindia.com';
-const YAHOO='https://query1.finance.yahoo.com/v7/finance/quote';
+const YAHOO_QUOTE='https://query1.finance.yahoo.com/v7/finance/quote';
+const YAHOO_CHART='https://query1.finance.yahoo.com/v8/finance/chart';
 const browserHeaders={accept:'application/json,text/plain,*/*','accept-language':'en-US,en;q=0.9','user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',referer:'https://www.nseindia.com/market-data/live-equity-market'};
 
-async function fetchWithTimeout(url:string,headers:Record<string,string>,timeoutMs=3500){
+async function fetchWithTimeout(url:string,headers:Record<string,string>,timeoutMs=5000){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{return await fetch(url,{headers,signal:controller.signal,cache:'no-store'});}finally{clearTimeout(timer)}
@@ -43,9 +44,34 @@ async function fetchNse(symbols:string[]):Promise<MarketSnapshot>{
   return {source:'NSE_PUBLIC',status:'LIVE',asOf:new Date().toISOString(),quotes};
 }
 
-async function fetchYahoo(symbols:string[]):Promise<MarketSnapshot>{
+async function fetchYahooChart(symbols:string[]):Promise<MarketSnapshot>{
+  const results=await Promise.allSettled(symbols.map(async symbol=>{
+    const response=await fetchWithTimeout(`${YAHOO_CHART}/${encodeURIComponent(symbol+'.NS')}?range=1d&interval=5m&includePrePost=false&events=div%2Csplits`,{accept:'application/json,text/plain,*/*','user-agent':'Mozilla/5.0'},5000);
+    if(!response.ok)throw new Error(`Yahoo chart ${symbol} ${response.status}`);
+    const json=await response.json();
+    const result=json?.chart?.result?.[0];
+    if(!result)throw new Error(`Yahoo chart ${symbol} empty`);
+    const meta=result.meta||{};
+    const quote=result.indicators?.quote?.[0]||{};
+    const closes=Array.isArray(quote.close)?quote.close.filter((v:any)=>Number.isFinite(Number(v))):[];
+    const opens=Array.isArray(quote.open)?quote.open.filter((v:any)=>Number.isFinite(Number(v))):[];
+    const highs=Array.isArray(quote.high)?quote.high.filter((v:any)=>Number.isFinite(Number(v))):[];
+    const lows=Array.isArray(quote.low)?quote.low.filter((v:any)=>Number.isFinite(Number(v))):[];
+    const volumes=Array.isArray(quote.volume)?quote.volume.filter((v:any)=>Number.isFinite(Number(v))):[];
+    const price=number(meta.regularMarketPrice)||number(closes[closes.length-1]);
+    const prevClose=number(meta.previousClose)||number(meta.chartPreviousClose);
+    if(!price||!prevClose)throw new Error(`Yahoo chart ${symbol} missing price`);
+    return {symbol,quote:{price,prevClose,gapPct:((price-prevClose)/prevClose)*100,activity:number(volumes[volumes.length-1]),open:number(opens[opens.length-1])||price,high:number(highs[highs.length-1])||price,low:number(lows[lows.length-1])||price}};
+  }));
+  const quotes:MarketSnapshot['quotes']={};
+  for(const r of results)if(r.status==='fulfilled')quotes[r.value.symbol]=r.value.quote;
+  if(Object.keys(quotes).length<Math.min(5,symbols.length))throw new Error(`Yahoo chart returned only ${Object.keys(quotes).length} quotes`);
+  return {source:'YAHOO_CHART_PUBLIC',status:'LIVE',asOf:new Date().toISOString(),quotes};
+}
+
+async function fetchYahooQuote(symbols:string[]):Promise<MarketSnapshot>{
   const yahooSymbols=symbols.map(s=>`${s}.NS`).join(',');
-  const response=await fetchWithTimeout(`${YAHOO}?symbols=${encodeURIComponent(yahooSymbols)}`,{accept:'application/json,text/plain,*/*','user-agent':'Mozilla/5.0'},4500);
+  const response=await fetchWithTimeout(`${YAHOO_QUOTE}?symbols=${encodeURIComponent(yahooSymbols)}`,{accept:'application/json,text/plain,*/*','user-agent':'Mozilla/5.0'},5000);
   if(!response.ok)throw new Error(`Yahoo quote ${response.status}`);
   const json=await response.json();
   const rows=Array.isArray(json?.quoteResponse?.result)?json.quoteResponse.result:[];
@@ -64,8 +90,10 @@ async function fetchYahoo(symbols:string[]):Promise<MarketSnapshot>{
 
 export const nsePublicAdapter:MarketDataAdapter={async getSnapshot(symbols){
   try{return await fetchNse(symbols)}catch(nseError){
-    try{return await fetchYahoo(symbols)}catch(yahooError){
-      throw new Error(`Market data unavailable: NSE=${(nseError as Error)?.message||nseError}; Yahoo=${(yahooError as Error)?.message||yahooError}`);
+    try{return await fetchYahooChart(symbols)}catch(chartError){
+      try{return await fetchYahooQuote(symbols)}catch(yahooError){
+        throw new Error(`Market data unavailable: NSE=${(nseError as Error)?.message||nseError}; YahooChart=${(chartError as Error)?.message||chartError}; YahooQuote=${(yahooError as Error)?.message||yahooError}`);
+      }
     }
   }
 }};
