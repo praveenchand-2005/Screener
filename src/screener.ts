@@ -1,4 +1,4 @@
-import {UNIVERSE} from './universe';
+import {UNIVERSE} from './universe.js';
 export type Candidate={symbol:string;segment:string;gapPct:number;activity:number;cprWidthPct:number;bias:'BULL'|'BEAR'|'NEUTRAL';score:number};
 export type Quote={symbol:string;gapPct:number;activity:number;cprWidthPct:number;price:number;prevClose:number};
 export function rankScreener(quotes:Quote[],opts={gapMin:1,activityMin:500_000,cprMax:0.5}){return quotes.filter(q=>Math.abs(q.gapPct)>=opts.gapMin&&q.activity>=opts.activityMin&&q.cprWidthPct<=opts.cprMax).map(q=>{const stock=UNIVERSE.find(s=>s.symbol===q.symbol);const bias=q.gapPct>0?'BULL':q.gapPct<0?'BEAR':'NEUTRAL';const gap=Math.min(Math.abs(q.gapPct)/3,1)*40;const activity=Math.min(q.activity/2_000_000,1)*30;const compression=Math.max(0,1-q.cprWidthPct/opts.cprMax)*30;return {symbol:q.symbol,segment:stock?.segment??'UNKNOWN',gapPct:q.gapPct,activity:q.activity,cprWidthPct:q.cprWidthPct,bias,score:Math.round(gap+activity+compression)} as Candidate}).sort((a,b)=>b.score-a.score)}
