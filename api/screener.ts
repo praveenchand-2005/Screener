@@ -1,6 +1,6 @@
-import {UNIVERSE} from '../src/universe';
-import {rankScreener} from '../src/screener';
-import {nsePublicAdapter} from '../src/dataAdapter';
+import {UNIVERSE} from '../src/universe.js';
+import {rankScreener} from '../src/screener.js';
+import {nsePublicAdapter} from '../src/dataAdapter.js';
 
 function cprWidthPct(q:{price:number;open:number;high:number;low:number}){
   if(!q.high||!q.low||!q.price)return 0;
