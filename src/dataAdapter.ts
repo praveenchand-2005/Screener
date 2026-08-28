@@ -4,6 +4,7 @@ export type Quote={price:number;prevClose:number;gapPct:number;activity:number;o
 export type MarketSnapshot={source:MarketSource;status:MarketStatus;asOf:string;quotes:Record<string,Quote>;requested:number;received:number;valid:number};
 export interface MarketDataAdapter{getSnapshot(symbols:string[]):Promise<MarketSnapshot>}
 
+type Bar={t:number;c:number;o:number;h:number;l:number;v:number};
 const NSE='https://www.nseindia.com';
 const YAHOO='https://query1.finance.yahoo.com';
 const PUBLIC_PROXY='https://nse-api-khaki.vercel.app';
@@ -12,7 +13,7 @@ const headers={accept:'application/json,text/plain,*/*','user-agent':'Mozilla/5.
 async function get(url:string,timeoutMs:number,extra:Record<string,string>={}){const c=new AbortController();const t=setTimeout(()=>c.abort(),timeoutMs);try{return await fetch(url,{headers:{...headers,...extra},signal:c.signal,cache:'no-store'})}finally{clearTimeout(t)}}
 function n(v:any){const x=Number(String(v??'').replace(/,/g,''));return Number.isFinite(x)?x:0}
 function firstNumber(row:any,keys:string[]){for(const key of keys){const value=n(row?.[key]);if(value)return value}return 0}
-function snapshot(source:MarketSource,symbols:string[],quotes:Record<string,Quote>):MarketSnapshot{return {source,status:'LIVE',asOf:new Date().toISOString(),quotes,requested:symbols.length,received:Object.keys(quotes).length,valid:Object.values(quotes).filter(q=>q.price>0&&q.prevClose>0).length}}
+function snapshot(source:MarketSource,symbols:string[],quotes:Record<string,Quote>):MarketSnapshot{return {source,status:'LIVE',asOf:new Date().toISOString(),quotes,requested:symbols.length,received:Object.keys(quotes).length,valid:Object.values(quotes).filter((q:Quote)=>q.price>0&&q.prevClose>0).length}}
 
 async function fetchProxy(symbols:string[]):Promise<MarketSnapshot>{
   const quotes:Record<string,Quote>={};
@@ -63,14 +64,30 @@ async function fetchNse(symbols:string[]):Promise<MarketSnapshot>{
 
 async function fetchYahooChart(symbols:string[]):Promise<MarketSnapshot>{
   const quotes:Record<string,Quote>={};
-  await Promise.all(symbols.map(async symbol=>{try{const r=await get(`${YAHOO}/v8/finance/chart/${encodeURIComponent(symbol+'.NS')}?range=5d&interval=5m`,3500);if(!r.ok)return;const j=await r.json();const result=j?.chart?.result?.[0],q=result?.indicators?.quote?.[0]||{},m=result?.meta||{};const timestamps=Array.isArray(result?.timestamp)?result.timestamp:[];const closes=Array.isArray(q.close)?q.close:[],opens=Array.isArray(q.open)?q.open:[],highs=Array.isArray(q.high)?q.high:[],lows=Array.isArray(q.low)?q.low:[],volumes=Array.isArray(q.volume)?q.volume:[];const valid=closes.map((v:any,i:number)=>({i,v:n(v),t:Number(timestamps[i]||0)})).filter(x=>x.v>0&&x.t>0);const price=n(m.regularMarketPrice)||n(valid.at(-1)?.v);const prevClose=n(m.previousClose)||n(m.chartPreviousClose);if(!price||!prevClose)return;const todayStart=Math.floor(Date.now()/1000)-24*60*60;const prior=valid.filter(x=>x.t<todayStart);const prevDay=Math.floor((prior.at(-1)?.t||0)/86400);const prevIdx=valid.map((x,idx)=>({x,idx})).filter(z=>Math.floor(z.x.t/86400)===prevDay).map(z=>z.idx);const currentIdx=valid.map((x,idx)=>({x,idx})).filter(z=>Math.floor(z.x.t/86400)===Math.floor(Date.now()/1000/86400)).map(z=>z.idx);const dayIdx=currentIdx.length?currentIdx:valid.map((x,idx)=>({x,idx})).filter(z=>Math.floor(z.x.t/86400)===Math.floor(valid.at(-1)?.t/86400)).map(z=>z.idx);const prevHigh=prevIdx.length?Math.max(...prevIdx.map(i=>n(highs[i]))):0;const prevLow=prevIdx.length?Math.min(...prevIdx.map(i=>n(lows[i]))):0;const activity=dayIdx.reduce((sum,i)=>sum+n(volumes[i]),0);const open=dayIdx.length?n(opens[dayIdx[0]]):price;const high=dayIdx.length?Math.max(...dayIdx.map(i=>n(highs[i]))):price;const low=dayIdx.length?Math.min(...dayIdx.map(i=>n(lows[i]))):price;quotes[symbol]={price,prevClose,gapPct:((price-prevClose)/prevClose)*100,activity,open:open||price,high:high||price,low:low||price,prevHigh:prevHigh||undefined,prevLow:prevLow||undefined}}catch{}}));
-  if(Object.keys(quotes).length<Math.min(5,symbols.length))throw new Error(`Yahoo chart returned ${Object.keys(quotes).length} quotes`);return snapshot('YAHOO_CHART_PUBLIC',symbols,quotes);
+  await Promise.all(symbols.map(async (symbol:string)=>{try{
+    const r=await get(`${YAHOO}/v8/finance/chart/${encodeURIComponent(symbol+'.NS')}?range=5d&interval=5m`,3500);if(!r.ok)return;
+    const j=await r.json();const result=j?.chart?.result?.[0];const raw=result?.indicators?.quote?.[0]||{};const timestamps:Array<any>=Array.isArray(result?.timestamp)?result.timestamp:[];
+    const closes:Array<any>=Array.isArray(raw.close)?raw.close:[],opens:Array<any>=Array.isArray(raw.open)?raw.open:[],highs:Array<any>=Array.isArray(raw.high)?raw.high:[],lows:Array<any>=Array.isArray(raw.low)?raw.low:[],volumes:Array<any>=Array.isArray(raw.volume)?raw.volume:[];
+    const bars:Bar[]=timestamps.map((t:any,i:number)=>({t:n(t),c:n(closes[i]),o:n(opens[i]),h:n(highs[i]),l:n(lows[i]),v:n(volumes[i])})).filter((b:Bar)=>b.t>0&&b.c>0&&b.h>0&&b.l>0);
+    if(bars.length<2)return;
+    const m=result?.meta||{};const price=n(m.regularMarketPrice)||bars[bars.length-1].c;const prevClose=n(m.previousClose)||n(m.chartPreviousClose);if(!price||!prevClose)return;
+    const days=Array.from(new Set(bars.map((b:Bar)=>Math.floor(b.t/86400))));const currentDay=days[days.length-1];const previousDay=days.length>1?days[days.length-2]:0;
+    const dayBars=bars.filter((b:Bar)=>Math.floor(b.t/86400)===currentDay);const prevBars=bars.filter((b:Bar)=>Math.floor(b.t/86400)===previousDay);
+    const activity=dayBars.reduce((sum:number,b:Bar)=>sum+b.v,0);const open=dayBars[0]?.o||price;const high=dayBars.reduce((m:number,b:Bar)=>Math.max(m,b.h),price);const low=dayBars.reduce((m:number,b:Bar)=>Math.min(m,b.l),price);const prevHigh=prevBars.reduce((m:number,b:Bar)=>Math.max(m,b.h),0);const prevLow=prevBars.reduce((m:number,b:Bar)=>Math.min(m,b.l),Infinity);
+    quotes[symbol]={price,prevClose,gapPct:((price-prevClose)/prevClose)*100,activity,open,high,low,prevHigh:prevHigh||undefined,prevLow:Number.isFinite(prevLow)?prevLow:undefined};
+  }catch{}}));
+  if(Object.keys(quotes).length<Math.min(5,symbols.length))throw new Error(`Yahoo chart returned ${Object.keys(quotes).length} quotes`);
+  return snapshot('YAHOO_CHART_PUBLIC',symbols,quotes);
 }
 
 async function enrichPreviousSession(snapshotIn:MarketSnapshot):Promise<MarketSnapshot>{
-  const needs=Object.entries(snapshotIn.quotes).filter(([_,q])=>!q.prevHigh||!q.prevLow).filter(([_,q])=>Math.abs(q.gapPct)>=1&&q.activity>=500_000).map(([symbol])=>symbol);
+  const needs=Object.entries(snapshotIn.quotes).filter((entry:[string,Quote])=>!entry[1].prevHigh||!entry[1].prevLow).filter((entry:[string,Quote])=>Math.abs(entry[1].gapPct)>=1&&entry[1].activity>=500_000).map((entry:[string,Quote])=>entry[0]);
   if(!needs.length)return snapshotIn;
-  const enriched=await Promise.all(needs.map(async symbol=>{try{const r=await get(`${YAHOO}/v8/finance/chart/${encodeURIComponent(symbol+'.NS')}?range=5d&interval=1d`,3500);if(!r.ok)return null;const j=await r.json();const result=j?.chart?.result?.[0],quote=result?.indicators?.quote?.[0]||{},timestamps=Array.isArray(result?.timestamp)?result.timestamp:[];const closes=Array.isArray(quote.close)?quote.close:[],highs=Array.isArray(quote.high)?quote.high:[],lows=Array.isArray(quote.low)?quote.low:[];const rows=timestamps.map((t:any,i:number)=>({t:Number(t),c:n(closes[i]),h:n(highs[i]),l:n(lows[i])})).filter(x=>x.t&&x.c&&x.h&&x.l);if(rows.length<2)return null;const prev=rows.at(-2)!;return {symbol,prevHigh:prev.h,prevLow:prev.l}}catch{return null}}));
+  const enriched=await Promise.all(needs.map(async (symbol:string)=>{try{
+    const r=await get(`${YAHOO}/v8/finance/chart/${encodeURIComponent(symbol+'.NS')}?range=5d&interval=1d`,3500);if(!r.ok)return null;
+    const j=await r.json();const result=j?.chart?.result?.[0];const quote=result?.indicators?.quote?.[0]||{};const timestamps:Array<any>=Array.isArray(result?.timestamp)?result.timestamp:[];const closes:Array<any>=Array.isArray(quote.close)?quote.close:[],highs:Array<any>=Array.isArray(quote.high)?quote.high:[],lows:Array<any>=Array.isArray(quote.low)?quote.low:[];
+    const rows:Bar[]=timestamps.map((t:any,i:number)=>({t:n(t),c:n(closes[i]),o:0,h:n(highs[i]),l:n(lows[i]),v:0})).filter((b:Bar)=>b.t&&b.c&&b.h&&b.l);if(rows.length<2)return null;const prev=rows[rows.length-2];return {symbol,prevHigh:prev.h,prevLow:prev.l};
+  }catch{return null}}));
   for(const item of enriched){if(!item)continue;const q=snapshotIn.quotes[item.symbol];if(q){q.prevHigh=item.prevHigh;q.prevLow=item.prevLow}}
   return snapshotIn;
 }
