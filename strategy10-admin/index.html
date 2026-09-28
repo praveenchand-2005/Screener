@@ -74,24 +74,27 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </main>
 </div>
 <script>
-const state={price:56482.35,open:56205.45,high:56610.2,low:56120.15,cycle:184,capital:100000,trades:[],events:[],history:[]};
+async function api(path,opts){const r=await fetch(path,opts);if(!r.ok)throw new Error('API '+r.status);return r.json()}
 const fmt=n=>new Intl.NumberFormat('en-IN',{maximumFractionDigits:2}).format(n);
-const now=()=>new Date().toLocaleTimeString('en-IN',{hour12:false});
 const el=id=>document.getElementById(id);
-function addEvent(title,detail){state.events.unshift({t:now(),title,detail});state.events=state.events.slice(0,7);el('events').innerHTML=state.events.map(e=>'<div class="event"><time>'+e.t+'</time><i></i><div><b>'+e.title+'</b><small>'+e.detail+'</small></div></div>').join('');el('eventCount').textContent=(184+state.cycle-184)+' events'}
-function evaluate(){
- state.cycle++;
- const delta=(Math.random()-.47)*95; state.price=Math.max(55500,Math.min(57500,state.price+delta)); state.high=Math.max(state.high,state.price); state.low=Math.min(state.low,state.price);
- const range=state.high-state.low, dir=state.price>=state.open?'UP':'DOWN';
- el('price').innerHTML=fmt(state.price)+' <span class="'+(dir==='UP'?'up':'negative')+'" style="font-size:11px">'+(dir==='UP'?'+':'')+(((state.price-state.open)/state.open)*100).toFixed(2)+'%</span>';
- el('high').textContent=fmt(state.high);el('low').textContent=fmt(state.low);el('range').textContent=fmt(range);el('scan').textContent=now();el('cycle').textContent='#'+String(state.cycle).padStart(6,'0');
- el('r2').textContent='Range is '+fmt(range);
- const r2=range>=300;el('r2c').className='check '+(r2?'ok':'wait');el('r2c').textContent=r2?'✓':'!';
- if(r2){el('r3c').className='check ok';el('r3c').textContent='✓';el('r3').textContent='Direction: '+dir;let side;if(range<=500)side=dir==='UP'?'BUY CE':'BUY PE';else side=dir==='UP'?'BUY PE':'BUY CE';el('r4c').className='check ok';el('r4c').textContent='✓';el('r4').textContent=side+' · range bucket '+(range<=500?'300–500':'>500');el('signalTitle').textContent='VALID SIGNAL — '+side;el('signalSub').textContent='Demo execution is available once strike, expiry, entry and exit parameters are configured.';el('signalSide').textContent=side.split(' ')[1];el('signal').style.borderColor='#29d7ff55';addEvent('Rule check passed',side+' · Range '+fmt(range)+' · '+dir)}else{el('r3c').className='check';el('r3c').textContent='•';el('r4c').className='check';el('r4c').textContent='•';el('signalTitle').textContent='MONITORING — RANGE FILTER';el('signalSub').textContent='No signal: daily range must reach at least 300 points.';el('signalSide').textContent='—';addEvent('Market scan','Range '+fmt(range)+' · below 300 · no trade')}
- state.history.push(state.price);if(state.history.length>80)state.history.shift();draw();state.cycle%5===0&&addEvent('Price update','BANKNIFTY '+fmt(state.price)+' · synthetic demo feed');
+function render(d){
+ el('price').innerHTML=fmt(d.market.close)+' <span class="'+(d.market.direction==='UP'?'up':'negative')+'" style="font-size:11px">'+(d.market.direction==='UP'?'+':'')+d.market.changePct.toFixed(2)+'%</span>';
+ el('open').textContent=fmt(d.market.open);el('high').textContent=fmt(d.market.high);el('low').textContent=fmt(d.market.low);el('range').textContent=fmt(d.market.range);
+ el('scan').textContent=d.engine.lastScan;el('cycle').textContent='#'+String(d.engine.cycle).padStart(6,'0');
+ el('capital').textContent='₹'+fmt(d.account.startingCapital);el('cash').textContent='₹'+fmt(d.account.cash);
+ const pnl=d.account.totalPnl;el('today').textContent=(pnl>=0?'+':'')+'₹'+fmt(pnl);el('total').textContent=(pnl>=0?'+':'')+'₹'+fmt(pnl);el('total').className='value '+(pnl>=0?'positive':'negative');
+ el('winrate').textContent=d.account.trades?((d.account.wins/d.account.trades)*100).toFixed(1)+'%':'—';el('tradecount').textContent=d.account.trades+' trades';el('position').textContent=d.position?d.position.side+' '+d.position.strike:'NONE';
+ const rangeOk=d.market.range>=300, dir=d.market.direction;el('r2').textContent='Range is '+fmt(d.market.range);el('r2c').className='check '+(rangeOk?'ok':'wait');el('r2c').textContent=rangeOk?'✓':'!';
+ el('r3c').className='check '+(rangeOk?'ok':'');el('r3c').textContent=rangeOk?'✓':'•';el('r3').textContent=rangeOk?'Direction: '+dir:'Close vs Open';
+ if(rangeOk){const side=d.signal.side;el('r4c').className='check ok';el('r4c').textContent='✓';el('r4').textContent=side+' · '+(d.market.range<=500?'300–500':'>500');el('signalTitle').textContent=d.signal.status==='EXECUTED'?'SIMULATED ENTRY — '+side:'VALID SIGNAL — '+side;el('signalSub').textContent=d.signal.message;el('signalSide').textContent=side.split(' ')[1]}else{el('r4c').className='check';el('r4c').textContent='•';el('r4').textContent='Waiting for range ≥ 300';el('signalTitle').textContent='MONITORING — RANGE FILTER';el('signalSub').textContent='No signal: daily range must reach at least 300 points.';el('signalSide').textContent='—'}
+ el('r5c').className='check';el('r5c').textContent='•';el('r6c').className='check '+(d.signal.status==='EXECUTED'?'ok':'');el('r6c').textContent=d.signal.status==='EXECUTED'?'✓':'•';
+ el('events').innerHTML=d.events.map(e=>'<div class="event"><time>'+e.time+'</time><i></i><div><b>'+e.title+'</b><small>'+e.detail+'</small></div></div>').join('');el('eventCount').textContent=d.eventsTotal+' events';
+ el('trades').innerHTML=d.trades.length?d.trades.slice(0,8).map(t=>'<tr><td>'+t.time+'</td><td><span class="pill live">'+t.side+'</span></td><td>'+t.strike+'</td><td>'+t.entry+'</td><td>'+t.exit+'</td><td>'+t.qty+'</td><td class="'+(t.pnl>=0?'positive':'negative')+'">'+(t.pnl>=0?'+':'')+'₹'+fmt(t.pnl)+'</td><td><span class="pill '+(t.result==='WIN'?'win':'loss')+'">'+t.result+'</span></td></tr>').join(''):'<tr><td colspan="8" style="text-align:center;color:#50637b;padding:25px">No simulated trades yet.</td></tr>';
+ draw(d.market.history);
 }
-function draw(){const c=el('chart'),r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=r.width*d;c.height=r.height*d;const x=c.getContext('2d');x.scale(d,d);const w=r.width,h=r.height;x.strokeStyle='#132338';x.lineWidth=1;for(let i=1;i<6;i++){x.beginPath();x.moveTo(0,h*i/6);x.lineTo(w,h*i/6);x.stroke()}if(state.history.length<2)return;const min=Math.min(...state.history)-30,max=Math.max(...state.history)+30;x.beginPath();state.history.forEach((v,i)=>{const px=i*(w/(state.history.length-1)),py=h-(v-min)/(max-min)*h;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle='#29d7ff';x.lineWidth=2;x.shadowBlur=12;x.shadowColor='#29d7ff';x.stroke();x.shadowBlur=0;const last=state.history[state.history.length-1],py=h-(last-min)/(max-min)*h;x.fillStyle='#29d7ff';x.beginPath();x.arc(w-1,py,3,0,Math.PI*2);x.fill()}
+function draw(history){const c=el('chart'),r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=r.width*d;c.height=r.height*d;const x=c.getContext('2d');x.scale(d,d);const w=r.width,h=r.height;x.strokeStyle='#132338';x.lineWidth=1;for(let i=1;i<6;i++){x.beginPath();x.moveTo(0,h*i/6);x.lineTo(w,h*i/6);x.stroke()}if(history.length<2)return;const min=Math.min(...history)-20,max=Math.max(...history)+20;x.beginPath();history.forEach((v,i)=>{const px=i*(w/(history.length-1)),py=h-(v-min)/(max-min)*h;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle='#29d7ff';x.lineWidth=2;x.shadowBlur=12;x.shadowColor='#29d7ff';x.stroke();x.shadowBlur=0}
+async function refresh(){try{render(await api('/api/state'))}catch(e){console.error(e)}}
 function clock(){el('clock').textContent=new Date().toLocaleString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}
-addEvent('Engine started','Wednesday session detected · Strategy 10.1 monitoring active');for(let i=0;i<24;i++)state.history.push(state.price+(Math.random()-.5)*220);draw();clock();setInterval(clock,1000);setInterval(evaluate,1500);window.addEventListener('resize',draw);
+clock();setInterval(clock,1000);refresh();setInterval(refresh,1200);window.addEventListener('resize',refresh);
 </script>
 </body></html>
