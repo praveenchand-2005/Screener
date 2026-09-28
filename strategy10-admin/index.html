@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Strategy 10.1 — Cinematic Trading Room</title>
+<style>
+:root{--bg:#050912;--panel:#0a1220;--panel2:#0d1728;--line:#1b2a40;--text:#eaf2ff;--muted:#71819a;--cyan:#29d7ff;--green:#18e39a;--red:#ff5470;--yellow:#ffc857;--pink:#e85cff;--shadow:0 20px 70px #0008}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at 75% 0,#102849 0,#050912 38%,#03060c 100%);color:var(--text)}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(120deg,transparent 35%,#29d7ff05 50%,transparent 65%);animation:sweep 8s linear infinite}
+@keyframes sweep{0%{transform:translateX(-35%)}100%{transform:translateX(35%)}}
+.app{display:grid;grid-template-columns:235px 1fr;min-height:100vh}.side{border-right:1px solid #ffffff0d;background:#050b15dd;backdrop-filter:blur(18px);padding:20px 14px;position:sticky;top:0;height:100vh}
+.brand{display:flex;gap:11px;align-items:center;padding:8px 8px 24px}.logo{width:38px;height:38px;border:1px solid #29d7ff66;border-radius:12px;display:grid;place-items:center;background:#29d7ff0d;box-shadow:0 0 28px #29d7ff22;font-size:19px}.brand b{font-size:14px}.brand small{display:block;color:var(--muted);font-size:10px;margin-top:3px}
+.nav{display:grid;gap:6px}.nav button{border:0;background:transparent;color:#8292aa;text-align:left;padding:12px;border-radius:10px;cursor:pointer;font-size:12px;transition:.2s}.nav button:hover,.nav button.active{color:white;background:linear-gradient(90deg,#132943,#0c1728);box-shadow:inset 2px 0 var(--cyan)}.nav span{margin-right:9px}
+.mode{margin-top:28px;border:1px solid #18e39a30;border-radius:14px;padding:12px;background:#18e39a08}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green);margin-right:7px}.mode small{color:#6e8199}.mode b{font-size:11px}
+.main{padding:22px 24px 40px;max-width:1600px;width:100%;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.eyebrow{font-size:10px;letter-spacing:2px;color:var(--cyan);text-transform:uppercase}.title{font-size:21px;font-weight:750;margin-top:5px}.sub{font-size:11px;color:var(--muted);margin-top:4px}.topright{display:flex;gap:9px;align-items:center}.badge{border:1px solid #18e39a55;color:var(--green);background:#18e39a0b;padding:8px 11px;border-radius:999px;font-size:10px}.clock{font-size:11px;color:#91a1b9;border-left:1px solid #ffffff14;padding-left:13px}
+.grid{display:grid;gap:12px}.kpis{grid-template-columns:repeat(6,1fr)}.card{background:linear-gradient(145deg,#0d1829e8,#080f1ce8);border:1px solid #ffffff0c;border-radius:14px;box-shadow:var(--shadow);position:relative;overflow:hidden}.card:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(120deg,#ffffff04,transparent 35%)}.kpi{padding:15px}.label{font-size:10px;color:#71819a;text-transform:uppercase;letter-spacing:.7px}.value{font-size:20px;font-weight:760;margin-top:7px}.positive{color:var(--green)}.negative{color:var(--red)}.micro{font-size:9px;color:#5f718a;margin-top:4px}
+.market{grid-template-columns:1.6fr .9fr .8fr;margin-top:12px}.market-main{padding:16px}.market-head{display:flex;justify-content:space-between;align-items:center}.instrument{font-size:13px;font-weight:700}.price{font-size:25px;font-weight:800;margin-top:5px}.up{color:var(--green)}.spark{height:55px;margin-top:8px}.spark svg{width:100%;height:100%}.status-card{padding:16px}.status-title{display:flex;justify-content:space-between}.status{font-size:11px;color:var(--yellow);background:#ffc85712;border:1px solid #ffc85733;border-radius:8px;padding:6px 8px}.metric-row{display:flex;justify-content:space-between;margin-top:12px;font-size:10px}.metric-row span:first-child{color:var(--muted)}.metric-row b{font-size:11px}
+.content{grid-template-columns:1.45fr .9fr;margin-top:12px}.chart{padding:16px;min-height:320px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.section-head b{font-size:12px}.section-head small{color:var(--muted);font-size:9px}.chartbox{height:240px;position:relative;border:1px solid #ffffff07;border-radius:10px;background:linear-gradient(#071120,#07101b)}canvas{width:100%;height:100%}
+.rules{padding:16px}.rule{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #ffffff08}.rule:last-child{border-bottom:0}.check{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;background:#142234;color:#6c8098}.check.ok{background:#18e39a18;color:var(--green);box-shadow:0 0 18px #18e39a20}.check.wait{background:#ffc85718;color:var(--yellow)}.rule b{font-size:10px}.rule small{display:block;color:#687a92;font-size:9px;margin-top:3px}.pulse{animation:pulse 1.8s infinite}@keyframes pulse{50%{box-shadow:0 0 0 7px #18e39a00}}
+.bottom{grid-template-columns:1.25fr .75fr;margin-top:12px}.tablecard,.events{padding:16px}.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:9px}th{text-align:left;color:#60728a;font-weight:600;padding:9px 7px;border-bottom:1px solid #ffffff0d}td{padding:10px 7px;border-bottom:1px solid #ffffff08;white-space:nowrap}.pill{padding:4px 7px;border-radius:5px;font-size:8px}.win{color:var(--green);background:#18e39a0d}.loss{color:var(--red);background:#ff54700d}.live{color:var(--cyan);background:#29d7ff0d}.event{display:grid;grid-template-columns:55px 8px 1fr;gap:8px;align-items:start;padding:10px 0;border-bottom:1px solid #ffffff08;font-size:9px}.event time{color:#5f7188}.event i{width:6px;height:6px;border-radius:50%;background:var(--cyan);margin-top:3px}.event b{font-weight:600}.event small{display:block;color:#64768e;margin-top:3px}
+.entry{margin-top:12px;padding:15px;border:1px solid #29d7ff25;background:linear-gradient(100deg,#29d7ff08,#e85cff06);border-radius:12px;display:flex;justify-content:space-between;align-items:center}.entry strong{font-size:12px}.entry small{display:block;color:#70829a;font-size:9px;margin-top:4px}.entry .ce{color:var(--cyan);font-size:18px;font-weight:800}
+.controls{display:flex;gap:7px}.btn{border:1px solid #ffffff13;background:#0b1626;color:#a6b6ca;padding:7px 10px;border-radius:8px;font-size:9px;cursor:pointer}.btn:hover{border-color:#29d7ff55;color:white}.btn.primary{background:#18e39a12;border-color:#18e39a44;color:var(--green)}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}.market,.content,.bottom{grid-template-columns:1fr}.side{width:210px}.app{grid-template-columns:210px 1fr}}
+@media(max-width:760px){.app{display:block}.side{height:auto;position:relative;width:auto;border-right:0;border-bottom:1px solid #ffffff0d}.nav{grid-template-columns:repeat(4,1fr)}.mode{display:none}.main{padding:15px}.kpis{grid-template-columns:repeat(2,1fr)}.top{align-items:flex-start}.topright{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+  <div class="brand"><div class="logo">⚡</div><div><b>STRATEGY 10.1</b><small>BANKNIFTY GAMMA BOMB</small></div></div>
+  <nav class="nav">
+    <button class="active"><span>◈</span>Command Center</button><button><span>◉</span>Live Monitor</button><button><span>↯</span>Trade Log</button><button><span>▣</span>Backtest Replay</button><button><span>⌁</span>Analytics</button><button><span>✓</span>Rules & Logic</button><button><span>⚙</span>Configuration</button>
+  </nav>
+  <div class="mode"><div><i class="dot"></i><b>DEMO / PAPER MODE</b></div><small>Simulation only · no broker orders</small></div>
+</aside>
+<main class="main">
+  <header class="top"><div><div class="eyebrow">Cinematic Trading Room</div><div class="title">Strategy 10.1 — Live Command Center</div><div class="sub">Backend strategy engine · BANKNIFTY · synthetic demo feed</div></div><div class="topright"><div class="badge"><i class="dot"></i> ENGINE MONITORING</div><div class="clock" id="clock"></div></div></header>
+
+  <section class="grid kpis">
+    <div class="card kpi"><div class="label">Demo Capital</div><div class="value" id="capital">₹1,00,000</div><div class="micro">Configured paper funds</div></div>
+    <div class="card kpi"><div class="label">Available Cash</div><div class="value" id="cash">₹1,00,000</div><div class="micro">No live broker connection</div></div>
+    <div class="card kpi"><div class="label">Today's P&L</div><div class="value positive" id="today">+₹0</div><div class="micro">Realized + unrealized</div></div>
+    <div class="card kpi"><div class="label">Total P&L</div><div class="value positive" id="total">+₹0</div><div class="micro">Since demo reset</div></div>
+    <div class="card kpi"><div class="label">Win Rate</div><div class="value" id="winrate">—</div><div class="micro" id="tradecount">0 trades</div></div>
+    <div class="card kpi"><div class="label">Active Position</div><div class="value" id="position">NONE</div><div class="micro">Waiting for valid signal</div></div>
+  </section>
+
+  <section class="grid market">
+    <div class="card market-main"><div class="market-head"><div><div class="instrument">BANKNIFTY <span class="micro">· NSE INDEX · DEMO</span></div><div class="price" id="price">56,482.35 <span class="up" style="font-size:11px">+0.49%</span></div></div><div class="controls"><button class="btn">1m</button><button class="btn primary">5m</button><button class="btn">15m</button></div></div><div class="spark"><svg viewBox="0 0 600 60" preserveAspectRatio="none"><polyline id="sparkline" fill="none" stroke="#29d7ff" stroke-width="2" points="0,45 30,40 55,44 80,30 110,34 140,23 170,28 200,18 230,25 260,16 290,22 320,11 350,19 380,13 410,17 440,7 470,12 500,5 530,9 560,3 600,7"/></svg></div></div>
+    <div class="card status-card"><div class="status-title"><b style="font-size:11px">Wednesday Session</b><span class="status pulse" id="dayStatus">ACTIVE</span></div><div class="metric-row"><span>Open</span><b id="open">56,205.45</b></div><div class="metric-row"><span>High</span><b id="high">56,610.20</b></div><div class="metric-row"><span>Low</span><b id="low">56,120.15</b></div><div class="metric-row"><span>Range</span><b id="range">490.05</b></div></div>
+    <div class="card status-card"><div class="status-title"><b style="font-size:11px">Scanner Heartbeat</b><span class="badge">LIVE</span></div><div class="metric-row"><span>Last scan</span><b id="scan">10:24:12</b></div><div class="metric-row"><span>Rule cycle</span><b id="cycle">#000184</b></div><div class="metric-row"><span>Data source</span><b>SYNTHETIC</b></div><div class="metric-row"><span>Next evaluation</span><b>&lt; 1 sec</b></div></div>
+  </section>
+
+  <section class="card entry" id="signal"><div><strong id="signalTitle">SCANNING MARKET…</strong><small id="signalSub">The engine evaluates Wednesday eligibility and range rules automatically.</small></div><div class="ce" id="signalSide">—</div></section>
+
+  <section class="grid content">
+    <div class="card chart"><div class="section-head"><b>Live BANKNIFTY Market</b><small>5-minute synthetic stream</small></div><div class="chartbox"><canvas id="chart"></canvas></div></div>
+    <div class="card rules"><div class="section-head"><b>Strategy 10.1 Rule Engine</b><small>Live evaluation</small></div>
+      <div class="rule"><div class="check ok">✓</div><div><b>1. Today is Wednesday</b><small id="r1">Eligible session</small></div></div>
+      <div class="rule"><div class="check wait" id="r2c">!</div><div><b>2. Daily range ≥ 300</b><small id="r2">Range is 490.05</small></div></div>
+      <div class="rule"><div class="check" id="r3c">•</div><div><b>3. Determine direction</b><small id="r3">Close vs Open</small></div></div>
+      <div class="rule"><div class="check" id="r4c">•</div><div><b>4. Select option side</b><small id="r4">Waiting for range bucket</small></div></div>
+      <div class="rule"><div class="check" id="r5c">•</div><div><b>5. Entry parameters</b><small>Not specified by source</small></div></div>
+      <div class="rule"><div class="check" id="r6c">•</div><div><b>6. Execute demo trade</b><small id="r6">Only after all configured conditions</small></div></div>
+      <div class="rule"><div class="check" id="r7c">•</div><div><b>7. Manage & exit</b><small>Exit rule/time requires configuration</small></div></div>
+    </div>
+  </section>
+
+  <section class="grid bottom">
+    <div class="card tablecard"><div class="section-head"><b>Recent Trade Log</b><div class="controls"><button class="btn">ALL</button><button class="btn">WIN</button><button class="btn">LOSS</button></div></div><div class="tablewrap"><table><thead><tr><th>TIME</th><th>SIDE</th><th>STRIKE</th><th>ENTRY</th><th>EXIT</th><th>QTY</th><th>P&L</th><th>STATUS</th></tr></thead><tbody id="trades"><tr><td colspan="8" style="text-align:center;color:#50637b;padding:25px">No simulated trades yet — waiting for a configured signal.</td></tr></tbody></table></div></div>
+    <div class="card events"><div class="section-head"><b>Scanner Event Stream</b><small id="eventCount">184 events</small></div><div id="events"></div></div>
+  </section>
+</main>
+</div>
+<script>
+const state={price:56482.35,open:56205.45,high:56610.2,low:56120.15,cycle:184,capital:100000,trades:[],events:[],history:[]};
+const fmt=n=>new Intl.NumberFormat('en-IN',{maximumFractionDigits:2}).format(n);
+const now=()=>new Date().toLocaleTimeString('en-IN',{hour12:false});
+const el=id=>document.getElementById(id);
+function addEvent(title,detail){state.events.unshift({t:now(),title,detail});state.events=state.events.slice(0,7);el('events').innerHTML=state.events.map(e=>'<div class="event"><time>'+e.t+'</time><i></i><div><b>'+e.title+'</b><small>'+e.detail+'</small></div></div>').join('');el('eventCount').textContent=(184+state.cycle-184)+' events'}
+function evaluate(){
+ state.cycle++;
+ const delta=(Math.random()-.47)*95; state.price=Math.max(55500,Math.min(57500,state.price+delta)); state.high=Math.max(state.high,state.price); state.low=Math.min(state.low,state.price);
+ const range=state.high-state.low, dir=state.price>=state.open?'UP':'DOWN';
+ el('price').innerHTML=fmt(state.price)+' <span class="'+(dir==='UP'?'up':'negative')+'" style="font-size:11px">'+(dir==='UP'?'+':'')+(((state.price-state.open)/state.open)*100).toFixed(2)+'%</span>';
+ el('high').textContent=fmt(state.high);el('low').textContent=fmt(state.low);el('range').textContent=fmt(range);el('scan').textContent=now();el('cycle').textContent='#'+String(state.cycle).padStart(6,'0');
+ el('r2').textContent='Range is '+fmt(range);
+ const r2=range>=300;el('r2c').className='check '+(r2?'ok':'wait');el('r2c').textContent=r2?'✓':'!';
+ if(r2){el('r3c').className='check ok';el('r3c').textContent='✓';el('r3').textContent='Direction: '+dir;let side;if(range<=500)side=dir==='UP'?'BUY CE':'BUY PE';else side=dir==='UP'?'BUY PE':'BUY CE';el('r4c').className='check ok';el('r4c').textContent='✓';el('r4').textContent=side+' · range bucket '+(range<=500?'300–500':'>500');el('signalTitle').textContent='VALID SIGNAL — '+side;el('signalSub').textContent='Demo execution is available once strike, expiry, entry and exit parameters are configured.';el('signalSide').textContent=side.split(' ')[1];el('signal').style.borderColor='#29d7ff55';addEvent('Rule check passed',side+' · Range '+fmt(range)+' · '+dir)}else{el('r3c').className='check';el('r3c').textContent='•';el('r4c').className='check';el('r4c').textContent='•';el('signalTitle').textContent='MONITORING — RANGE FILTER';el('signalSub').textContent='No signal: daily range must reach at least 300 points.';el('signalSide').textContent='—';addEvent('Market scan','Range '+fmt(range)+' · below 300 · no trade')}
+ state.history.push(state.price);if(state.history.length>80)state.history.shift();draw();state.cycle%5===0&&addEvent('Price update','BANKNIFTY '+fmt(state.price)+' · synthetic demo feed');
+}
+function draw(){const c=el('chart'),r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=r.width*d;c.height=r.height*d;const x=c.getContext('2d');x.scale(d,d);const w=r.width,h=r.height;x.strokeStyle='#132338';x.lineWidth=1;for(let i=1;i<6;i++){x.beginPath();x.moveTo(0,h*i/6);x.lineTo(w,h*i/6);x.stroke()}if(state.history.length<2)return;const min=Math.min(...state.history)-30,max=Math.max(...state.history)+30;x.beginPath();state.history.forEach((v,i)=>{const px=i*(w/(state.history.length-1)),py=h-(v-min)/(max-min)*h;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle='#29d7ff';x.lineWidth=2;x.shadowBlur=12;x.shadowColor='#29d7ff';x.stroke();x.shadowBlur=0;const last=state.history[state.history.length-1],py=h-(last-min)/(max-min)*h;x.fillStyle='#29d7ff';x.beginPath();x.arc(w-1,py,3,0,Math.PI*2);x.fill()}
+function clock(){el('clock').textContent=new Date().toLocaleString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}
+addEvent('Engine started','Wednesday session detected · Strategy 10.1 monitoring active');for(let i=0;i<24;i++)state.history.push(state.price+(Math.random()-.5)*220);draw();clock();setInterval(clock,1000);setInterval(evaluate,1500);window.addEventListener('resize',draw);
+</script>
+</body></html>
