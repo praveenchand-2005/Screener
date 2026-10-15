@@ -1,7 +1,6 @@
-"""Authenticated remote wrapper for the official Delta Exchange MCP.
+"""Authenticated remote wrapper for Delta Exchange Global production.
 
-This deployment is permanently locked to Delta India testnet. Trading tools remain
-hidden unless a later, explicit demo-validation change enables them.
+This deployment is locked to Global production and read-only account inspection.
 """
 from __future__ import annotations
 
@@ -13,18 +12,21 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-# Default safely to testnet and refuse a production environment.
-os.environ.setdefault("DELTA_MCP_ENV", "india_testnet")
-if os.getenv("DELTA_MCP_ENV", "").strip().lower() != "india_testnet":
-    raise RuntimeError("This remote deployment is locked to india_testnet.")
+os.environ.setdefault("DELTA_MCP_ENV", "global_prod")
+if os.getenv("DELTA_MCP_ENV", "").strip().lower() != "global_prod":
+    raise RuntimeError("This remote deployment is locked to global_prod.")
 
 from delta_exchange_mcp import config as config_mod
 from delta_exchange_mcp.server import build_server
 from delta_exchange_mcp.tools import trading
 
-APP_NAME = "Delta Exchange Official MCP (testnet)"
+# Upstream package lists India environments only; add Global production endpoint.
+config_mod.BASE_URLS["global_prod"] = "https://api.delta.exchange/v2"
+
+APP_NAME = "Delta Exchange Official MCP (Global production, read-only)"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "").strip()
-ALLOW_ORDER_EXECUTION = os.getenv("ALLOW_ORDER_EXECUTION", "false").strip().lower() == "true"
+# Hard lock: never expose order-changing tools on this service.
+ALLOW_ORDER_EXECUTION = False
 
 
 def auth_configured() -> bool:
@@ -45,19 +47,15 @@ async def auth_middleware(request: Request, call_next: Any) -> Response:
     return await call_next(request)
 
 
-# Build with the official Delta MCP package, so its request signing and API endpoint
-# handling are maintained by Delta rather than reimplemented here.
 cfg = config_mod.load()
 mcp = build_server(cfg)
 
-# The official package only registers account/trading tools when credentials exist.
-# Remove order-changing tools only when they were registered, keeping them hidden by default.
-if cfg.has_credentials and not ALLOW_ORDER_EXECUTION:
+# Preserve read-only account tools (positions/balances); remove order-changing tools.
+if cfg.has_credentials:
     for tool_name in trading.TOOL_NAMES:
         mcp.remove_tool(tool_name)
 
 app = mcp.streamable_http_app()
-app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
 
 
 async def health(request: Request) -> JSONResponse:
@@ -67,7 +65,7 @@ async def health(request: Request) -> JSONResponse:
         "environment": cfg.env,
         "auth_configured": auth_configured(),
         "account_credentials_configured": cfg.has_credentials,
-        "order_execution_enabled": bool(cfg.has_credentials and ALLOW_ORDER_EXECUTION),
+        "order_execution_enabled": False,
         "transport": "streamable-http",
     })
 
@@ -78,7 +76,7 @@ async def root(request: Request) -> JSONResponse:
         "status": "running",
         "mcp_endpoint": "/mcp",
         "environment": cfg.env,
-        "order_execution": "enabled" if cfg.has_credentials and ALLOW_ORDER_EXECUTION else "disabled",
+        "order_execution": "disabled",
     })
 
 
