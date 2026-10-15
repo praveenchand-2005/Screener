@@ -35,11 +35,14 @@ def configured_auth() -> bool:
 def auth_ok(request: Request) -> bool:
     if not configured_auth():
         return False
-    supplied = request.headers.get("authorization", "")
-    if not supplied.lower().startswith("bearer "):
-        return False
-    candidate = supplied[7:].strip()
-    return hmac.compare_digest(candidate, MCP_AUTH_TOKEN)
+    # ChatGPT custom MCP connectors can use API-key auth with a custom header.
+    # Support both X-MCP-API-Key and standard Bearer auth, without logging either.
+    supplied_key = request.headers.get("x-mcp-api-key", "").strip()
+    supplied_auth = request.headers.get("authorization", "")
+    candidate = supplied_key
+    if not candidate and supplied_auth.lower().startswith("bearer "):
+        candidate = supplied_auth[7:].strip()
+    return bool(candidate) and hmac.compare_digest(candidate, MCP_AUTH_TOKEN)
 
 
 def delta_request(method: str, path: str, params: dict[str, Any] | None = None, body: dict[str, Any] | None = None, private: bool = False) -> Any:
