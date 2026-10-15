@@ -1,6 +1,6 @@
-"""Authenticated remote wrapper for Delta Exchange Global production.
+"""Authenticated remote wrapper for Delta Exchange India production.
 
-This deployment is locked to Global production and read-only account inspection.
+This deployment is locked to India production and read-only account inspection.
 """
 from __future__ import annotations
 
@@ -12,19 +12,18 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+# Use the official Delta Exchange India production environment.
 os.environ["DELTA_MCP_ENV"] = "india_prod"
 
 from delta_exchange_mcp import config as config_mod
 from delta_exchange_mcp.server import build_server
 from delta_exchange_mcp.tools import trading
 
-# The upstream client validates environment names, so keep its supported india_prod
-# selector but override the REST base URL for the Global site the user actually uses.
-config_mod.BASE_URLS["india_prod"] = "https://api.delta.exchange/v2"
+# Explicitly pin the official India production REST endpoint.
+config_mod.BASE_URLS["india_prod"] = "https://api.india.delta.exchange/v2"
 
-APP_NAME = "Delta Exchange Official MCP (Global production, read-only)"
+APP_NAME = "Delta Exchange India (production, read-only)"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "").strip()
-# Hard lock: never expose order-changing tools on this service.
 ALLOW_ORDER_EXECUTION = False
 
 
@@ -49,12 +48,13 @@ async def auth_middleware(request: Request, call_next: Any) -> Response:
 cfg = config_mod.load()
 mcp = build_server(cfg)
 
-# Preserve read-only account tools (positions/balances); remove order-changing tools.
-if cfg.has_credentials:
-    for tool_name in trading.TOOL_NAMES:
-        mcp.remove_tool(tool_name)
+# Always remove every trading/order-changing tool, regardless of credential state.
+for tool_name in trading.TOOL_NAMES:
+    mcp.remove_tool(tool_name)
 
 app = mcp.streamable_http_app()
+# Enforce the configured token on the MCP endpoint.
+app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
 
 
 async def health(request: Request) -> JSONResponse:
