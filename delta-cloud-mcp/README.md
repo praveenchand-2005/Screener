@@ -1,41 +1,43 @@
-# Delta Exchange Cloud MCP (demo-first)
+# Delta Exchange Cloud MCP (official package, testnet-only)
 
-This is a separate remote MCP service for ChatGPT custom MCP connections. It does not modify the existing Render production services or their main branch.
+This is a separate remote MCP service for ChatGPT custom MCP connections. It does not modify the existing Render production services or the repository's main branch.
 
-## Safety defaults
-- Defaults to Delta India testnet: `DELTA_MCP_ENV=india_testnet` and `https://cdn-ind.testnet.deltaex.org`.
-- Live trading is explicitly disabled in this deployment.
-- Order execution is disabled until `ALLOW_ORDER_EXECUTION=true` is set after demo credentials are configured.
-- The API key/secret are supplied only as Render environment variables; never commit them or send them in chat.
-- The MCP endpoint requires a Bearer token. The placeholder token is deliberately rejected.
-- Bracket orders require both stop-loss and take-profit. Contract size is capped by `MAX_ORDER_SIZE` (default 10).
-- No withdrawal, transfer, close-all, or automatic retry tools are exposed.
+## Architecture
+- Uses the official `delta-exchange-mcp` package for Delta API signing and exchange calls.
+- Exposes MCP over Streamable HTTP at `/mcp`, with an API-key/Bearer authentication middleware.
+- Locked to Delta India testnet. The process refuses to start if `DELTA_MCP_ENV` is anything other than `india_testnet`.
+- Public market tools work without account credentials. Account reads require a matching testnet API key and secret.
+- Order-changing tools are hidden by default while `ALLOW_ORDER_EXECUTION=false`.
+- Never use production Delta credentials on this service. Do not send API secrets in chat.
 
-## Render environment variables
-Required before using the MCP endpoint:
-- `MCP_AUTH_TOKEN`: generate a unique random secret of at least 32 characters. Enter the same token into ChatGPT's custom MCP authentication settings as a Bearer token.
+## Render settings
+Build command:
+```bash
+pip install -r delta-cloud-mcp/requirements.txt
+```
+Start command:
+```bash
+uvicorn main:app --app-dir delta-cloud-mcp --host 0.0.0.0 --port $PORT
+```
+
+Expected environment:
+- `MCP_AUTH_TOKEN`: random secret of at least 32 characters, already configured in Render. Never commit it or print it in logs.
 - `DELTA_MCP_ENV=india_testnet`
-- `ALLOW_ORDER_EXECUTION=false` initially
-- `DELTA_API_KEY` and `DELTA_API_SECRET`: create demo/testnet credentials on Delta's demo site and add them in Render's Environment page, not in chat.
-- After read-only account checks succeed, set `ALLOW_ORDER_EXECUTION=true` to enable demo orders.
+- `ALLOW_ORDER_EXECUTION=false`
+- Optional later: `DELTA_API_KEY` and `DELTA_API_SECRET` from the Delta demo site, stored only as Render environment variables.
 
-Trading keys on Delta require an IP allowlist. Before adding a trading key, check Render's outbound IP guidance and allowlist only the required egress addresses. Do not use a production key with this demo service.
+## Endpoints
+- MCP: `https://YOUR-RENDER-SERVICE.onrender.com/mcp`
+- Health: `https://YOUR-RENDER-SERVICE.onrender.com/health` (reports configuration status only; never returns credentials)
 
-## Deploy
-- Runtime: Python
-- Build: `pip install -r delta-cloud-mcp/requirements.txt`
-- Start: `uvicorn main:app --app-dir delta-cloud-mcp --host 0.0.0.0 --port $PORT`
-- MCP endpoint: `https://YOUR-RENDER-SERVICE.onrender.com/mcp`
-- Health endpoint: `https://YOUR-RENDER-SERVICE.onrender.com/health`
+## Connection
+In the ChatGPT custom connector setup, select API-key authentication if that option is available and send the configured secret using the `X-MCP-API-Key` header (Bearer token is also accepted by the server). The OAuth option is not implemented by this service. If the ChatGPT connector setup only offers OAuth, this endpoint cannot be connected until an OAuth-compatible authorization layer is added.
 
-## MCP tools
-- `get_connection_status`
-- `get_ticker`
-- `scan_market`
-- `get_wallet_balances`
-- `get_open_positions`
-- `place_bracket_order` (demo only, disabled by default)
-- `cancel_order` (demo only, disabled by default)
+## Safety and validation
+1. Verify the health endpoint and MCP initialize/tools-list handshake.
+2. Connect the endpoint to ChatGPT using the supported API-key authentication mode.
+3. Verify public ticker/market scanning.
+4. Add a demo-only Delta API key and secret securely in Render, then verify balances and open positions.
+5. Keep order-changing tools disabled until the read-only checks pass and demo order protections are reviewed.
 
-## Notes
-This is a deliberately constrained first deployment, not an autonomous strategy. A tool call must explicitly request an order with symbol, side, size, order type, stop-loss and take-profit. Do not connect live credentials or enable live trading in this deployment.
+The remote service is a tool endpoint, not an autonomous strategy runner. No background trading is enabled.
