@@ -50,9 +50,9 @@ async def auth_middleware(request: Request, call_next: Any) -> Response:
 cfg = config_mod.load()
 mcp = build_server(cfg)
 
-# Do not expose order-changing tools in this initial deployment. Public market data and
-# authenticated account reads are allowed; order tools can be reviewed after demo validation.
-if not ALLOW_ORDER_EXECUTION:
+# The official package only registers account/trading tools when credentials exist.
+# Remove order-changing tools only when they were registered, keeping them hidden by default.
+if cfg.has_credentials and not ALLOW_ORDER_EXECUTION:
     for tool_name in trading.TOOL_NAMES:
         mcp.remove_tool(tool_name)
 
@@ -67,7 +67,7 @@ async def health(request: Request) -> JSONResponse:
         "environment": cfg.env,
         "auth_configured": auth_configured(),
         "account_credentials_configured": cfg.has_credentials,
-        "order_execution_enabled": False,
+        "order_execution_enabled": bool(cfg.has_credentials and ALLOW_ORDER_EXECUTION),
         "transport": "streamable-http",
     })
 
@@ -78,7 +78,7 @@ async def root(request: Request) -> JSONResponse:
         "status": "running",
         "mcp_endpoint": "/mcp",
         "environment": cfg.env,
-        "order_execution": "disabled",
+        "order_execution": "enabled" if cfg.has_credentials and ALLOW_ORDER_EXECUTION else "disabled",
     })
 
 
