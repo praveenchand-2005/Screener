@@ -12,16 +12,15 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-os.environ.setdefault("DELTA_MCP_ENV", "global_prod")
-if os.getenv("DELTA_MCP_ENV", "").strip().lower() != "global_prod":
-    raise RuntimeError("This remote deployment is locked to global_prod.")
+os.environ["DELTA_MCP_ENV"] = "india_prod"
 
 from delta_exchange_mcp import config as config_mod
 from delta_exchange_mcp.server import build_server
 from delta_exchange_mcp.tools import trading
 
-# Upstream package lists India environments only; add Global production endpoint.
-config_mod.BASE_URLS["global_prod"] = "https://api.delta.exchange/v2"
+# The upstream client validates environment names, so keep its supported india_prod
+# selector but override the REST base URL for the Global site the user actually uses.
+config_mod.BASE_URLS["india_prod"] = "https://api.delta.exchange/v2"
 
 APP_NAME = "Delta Exchange Official MCP (Global production, read-only)"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "").strip()
